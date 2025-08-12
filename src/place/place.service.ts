@@ -16,6 +16,28 @@ export class PlaceService {
     return this.prisma.place.findMany();
   }
 
+  async findPaginated(page: number, limit: number) {
+
+    const [place, total] = await this.prisma.$transaction([
+      this.prisma.place.findMany({
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: { created_at: 'desc' }
+      }),
+      this.prisma.place.count()
+
+    ])
+
+    return {
+      data: place,
+      meta: {
+        total,
+        page,
+        lastPage: Math.ceil(total / limit)
+      }
+    }
+  }
+
   async create(data: { name: string, typePlace: PlaceType, phone: string, latitude: number, longitude: number, images: imageObject[] }) {
     return this.prisma.place.create({ data });
   }
@@ -25,7 +47,7 @@ export class PlaceService {
     if (!place) throw new BadRequestException('Local não encontrado');
 
     let images = place.images as imageObject[];
-    
+
     // Se forem enviadas novas imagens
     if (newImages && newImages.length > 0) {
       // Deletar imagens antigas

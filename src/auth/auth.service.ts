@@ -4,21 +4,22 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { RegisterUserDto } from './dto/register.dto';
 import * as bcrypt from 'bcrypt'
 import { LoginDto } from './dto/login.dto';
+import { User } from '@prisma/client';
 
 @Injectable()
 export class AuthService {
 
     constructor(
-        private jwt: JwtService, 
+        private jwt: JwtService,
         private prisma: PrismaService
-    ){}
+    ) { }
 
     async registerUser(userData: RegisterUserDto) {
         const userExists = await this.prisma.user.findUnique({
-            where: {email: userData.email}
+            where: { email: userData.email }
         })
 
-        if(userExists){
+        if (userExists) {
             throw new ConflictException("Email já está em uso!")
         }
 
@@ -39,18 +40,23 @@ export class AuthService {
                 role: true
             }
         })
-        
+
         return newUser;
     }
 
     async validateUser(email: string, password: string) {
-        
-        const user = await this.prisma.user.findUnique({where:{email}})
-        
-        if(!user) throw new UnauthorizedException('Credenciais Inválidas!')
+
+        const user = await this.prisma.user.findUnique({ where: { email } })
+
+        if (!user) throw new UnauthorizedException('Credenciais Inválidas!')
+
+        if (!user.password) throw new UnauthorizedException(
+            'Usuário não possui senha definida(Logar com o google)'
+        )
+
 
         const isMatch = await bcrypt.compare(password, user.password)
-        if(!isMatch) throw new UnauthorizedException('Credenciais Inválidas!')
+        if (!isMatch) throw new UnauthorizedException('Credenciais Inválidas!')
 
         return user;
     }
@@ -59,8 +65,9 @@ export class AuthService {
         const user = await this.validateUser(
             credentials.email,
             credentials.password
-        )         
-        
+        )
+
+
         const payload = {
             userId: user.id,
             email: user.email,
@@ -73,23 +80,29 @@ export class AuthService {
 
     }
 
+    async findOrCreateGoogleUser({ googleId, email, name }) {
+        let user = await this.prisma.user.findUnique({
+            where: { googleId },
+        });
 
+        if (!user) {
+            user = await this.prisma.user.create({
+                data: {
+                    googleId,
+                    email,
+                    name,
+                },
+            });
+            return user;
+        }
 
+    }
+    singjwtForUser(user: User) {
+        const payload = {
+            sub: user.id,
+            email: user.email,
+            role: user.role
+        }
+        return this.jwt.sign(payload)
+    }
 }
-// import { Injectable } from '@nestjs/common';
-// import { PrismaService } from 'src/prisma/prisma.service';
-// import { JwtService } from '@nestjs/jwt';
-// import { RegisterUserDto } from './dto/register.dto';
-
-// @Injectable()
-// export class AuthService {
-//   constructor(
-//     private jwt: JwtService,
-//     private prisma: PrismaService,
-//   ) {}
-
-//   async register(userData: RegisterUserDto) {
-//     // Aqui você implementa a lógica de cadastro
-//   }
-// }
-
